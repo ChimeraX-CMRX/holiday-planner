@@ -83,7 +83,7 @@ HOLIDAY_DB_PATH="$PWD/demo.sqlite3" HOLIDAY_PORT=7071 python3 server.py
 
 The demo contains Amsterdam, Paris, Zürich and Rome; fictional flight/service numbers; rail journeys; famous landmarks; restaurants; and scheduled morning, afternoon, evening and night activities. It contains no real traveller, account or booking data.
 
-![Destination map and calendar](docs/screenshots/europe-destination.png)
+![Destination map and calendar](docs/screenshots/europe-destination.png?v=2)
 
 ![Whole-trip journeys](docs/screenshots/europe-journeys.png)
 
