@@ -11,7 +11,7 @@ ROOT=Path(__file__).resolve().parent
 DB_PATH=Path(os.environ.get('HOLIDAY_DB_PATH',ROOT/'holiday-planner.sqlite3')).expanduser()
 TILE_CACHE=Path(os.environ.get('HOLIDAY_TILE_CACHE',ROOT/'tile-cache')).expanduser()
 LISTEN_HOST=os.environ.get('HOLIDAY_HOST','0.0.0.0'); LISTEN_PORT=int(os.environ.get('HOLIDAY_PORT','7070')); MAX_BODY=32768
-CATEGORIES={'hotel','food','activity'}; PERIODS={'morning','afternoon','evening','night'}
+CATEGORIES={'hotel','food','activity'}; PERIODS={'morning','afternoon','evening','night'}; LIST_TYPES={'packing','todo'}
 HOLIDAY_STATUSES={'planning','booked'}; TRAVEL_STATUSES={'planned','booked'}
 TRAVEL_TYPES={'flight','train','ferry','coach','car','taxi','other'}
 THEMES={'city','beach','wildlife','winter','roadtrip','teal','blue','purple','orange','green','mono','custom'}
@@ -25,6 +25,8 @@ def db():
  CREATE TABLE IF NOT EXISTS destinations(id INTEGER PRIMARY KEY AUTOINCREMENT,holiday_id INTEGER NOT NULL REFERENCES holidays(id) ON DELETE CASCADE,slug TEXT NOT NULL,name TEXT NOT NULL,country TEXT NOT NULL,country_code TEXT NOT NULL,start_date TEXT NOT NULL,end_date TEXT NOT NULL,latitude REAL NOT NULL,longitude REAL NOT NULL,sort_order INTEGER NOT NULL DEFAULT 0,UNIQUE(holiday_id,slug));
  CREATE TABLE IF NOT EXISTS places(id INTEGER PRIMARY KEY AUTOINCREMENT,city TEXT,category TEXT NOT NULL,name TEXT NOT NULL,url TEXT,latitude REAL,longitude REAL,created_at INTEGER NOT NULL,schedule_date TEXT,schedule_period TEXT,source_type TEXT NOT NULL DEFAULT 'map',destination_id INTEGER);
  CREATE TABLE IF NOT EXISTS travel(id INTEGER PRIMARY KEY AUTOINCREMENT,holiday_id INTEGER NOT NULL REFERENCES holidays(id) ON DELETE CASCADE,travel_type TEXT NOT NULL,service_number TEXT NOT NULL DEFAULT '',from_name TEXT NOT NULL,to_name TEXT NOT NULL,departure_at TEXT NOT NULL,arrival_at TEXT,status TEXT NOT NULL DEFAULT 'planned',terminal TEXT NOT NULL DEFAULT '',booking_reference TEXT NOT NULL DEFAULT '',notes TEXT NOT NULL DEFAULT '',created_at INTEGER NOT NULL);
+ CREATE TABLE IF NOT EXISTS info_cards(id INTEGER PRIMARY KEY AUTOINCREMENT,destination_id INTEGER NOT NULL REFERENCES destinations(id) ON DELETE CASCADE,title TEXT NOT NULL,body TEXT NOT NULL DEFAULT '',link_url TEXT NOT NULL DEFAULT '',created_at INTEGER NOT NULL);
+ CREATE TABLE IF NOT EXISTS checklist_items(id INTEGER PRIMARY KEY AUTOINCREMENT,holiday_id INTEGER NOT NULL REFERENCES holidays(id) ON DELETE CASCADE,list_type TEXT NOT NULL,item_text TEXT NOT NULL,completed INTEGER NOT NULL DEFAULT 0,created_at INTEGER NOT NULL);
  ''')
  pc=cols(c,'places')
  for name,definition in [('schedule_date','TEXT'),('schedule_period','TEXT'),('source_type',"TEXT NOT NULL DEFAULT 'map'"),('destination_id','INTEGER')]:
@@ -48,6 +50,12 @@ def datetime_value(v,label,optional=False):
  if optional and not s:return None
  try:return dt.datetime.fromisoformat(s).isoformat(timespec='minutes')
  except ValueError as e: raise ValueError(f'Choose a valid {label}') from e
+def web_url(v):
+ s=clean(v,'link',2048,False)
+ if not s:return ''
+ u=urllib.parse.urlparse(s)
+ if u.scheme not in {'http','https'} or not u.netloc:raise ValueError('Use a complete http or https link')
+ return s
 def body(h):
  n=int(h.headers.get('Content-Length','0'))
  if not 0<n<=MAX_BODY: raise ValueError('Invalid request size')
@@ -90,7 +98,7 @@ def geocode(name,country):
   if not result:raise ValueError('That destination could not be found on the map')
   return float(result[0]['lat']),float(result[0]['lon'])
  except (urllib.error.URLError,TimeoutError,KeyError,TypeError) as e:raise ValueError('That destination could not be found on the map') from e
-def state(c):return {'holidays':[dict(r) for r in c.execute('SELECT * FROM holidays ORDER BY start_date,id')],'destinations':[dict(r) for r in c.execute('SELECT * FROM destinations ORDER BY holiday_id,sort_order,start_date,id')],'places':[dict(r) for r in c.execute('SELECT id,destination_id,category,name,url,latitude,longitude,schedule_date,schedule_period,source_type FROM places WHERE destination_id IS NOT NULL ORDER BY created_at,id')],'travel':[dict(r) for r in c.execute('SELECT * FROM travel ORDER BY holiday_id,departure_at,id')]}
+def state(c):return {'holidays':[dict(r) for r in c.execute('SELECT * FROM holidays ORDER BY start_date,id')],'destinations':[dict(r) for r in c.execute('SELECT * FROM destinations ORDER BY holiday_id,sort_order,start_date,id')],'places':[dict(r) for r in c.execute('SELECT id,destination_id,category,name,url,latitude,longitude,schedule_date,schedule_period,source_type FROM places WHERE destination_id IS NOT NULL ORDER BY created_at,id')],'travel':[dict(r) for r in c.execute('SELECT * FROM travel ORDER BY holiday_id,departure_at,id')],'info_cards':[dict(r) for r in c.execute('SELECT * FROM info_cards ORDER BY created_at,id')],'checklist_items':[dict(r) for r in c.execute('SELECT * FROM checklist_items ORDER BY completed,created_at,id')]}
 
 class Handler(SimpleHTTPRequestHandler):
  server_version='HolidayPlanner/2.0'
@@ -156,11 +164,19 @@ class Handler(SimpleHTTPRequestHandler):
       url=clean(p.get('url'),'Google Maps link',2048);final,page=resolve_url(url);xy=coords_from(final) or coords_from(page)
       if not xy or not all(math.isfinite(v) for v in xy):raise ValueError('I could not find coordinates in that Google Maps link')
       item=c.execute("INSERT INTO places(city,destination_id,category,name,url,latitude,longitude,created_at,source_type) VALUES(?,?,?,?,?,?,?,?,'map')",(d['slug'],did,category,place_name(final,page),final,*xy,int(time.time()))).lastrowid
+    elif path=='/api/info-cards':
+     did=int(p.get('destination_id',0))
+     if not c.execute('SELECT 1 FROM destinations WHERE id=?',(did,)).fetchone():raise ValueError('Destination not found')
+     item=c.execute('INSERT INTO info_cards(destination_id,title,body,link_url,created_at) VALUES(?,?,?,?,?)',(did,clean(p.get('title'),'card title'),clean(p.get('body'),'information',4000),web_url(p.get('link_url')),int(time.time()))).lastrowid
+    elif path=='/api/checklist-items':
+     hid=int(p.get('holiday_id',0));typ=str(p.get('list_type',''))
+     if typ not in LIST_TYPES or not c.execute('SELECT 1 FROM holidays WHERE id=?',(hid,)).fetchone():raise ValueError('Invalid checklist')
+     item=c.execute('INSERT INTO checklist_items(holiday_id,list_type,item_text,created_at) VALUES(?,?,?,?)',(hid,typ,clean(p.get('item_text'),'list item',240),int(time.time()))).lastrowid
     else:self.send_error(404);return
    self.respond({'id':item},201)
   except (ValueError,json.JSONDecodeError,sqlite3.IntegrityError) as e:self.respond({'error':str(e)},400)
  def do_PATCH(self):
-  path=urllib.parse.urlparse(self.path).path;m=re.fullmatch(r'/api/(holidays|destinations|places|travel)/(\d+)',path)
+  path=urllib.parse.urlparse(self.path).path;m=re.fullmatch(r'/api/(holidays|destinations|places|travel|info-cards|checklist-items)/(\d+)',path)
   if not m:self.send_error(404);return
   try:
    p=body(self);kind,item=m.group(1),int(m.group(2))
@@ -171,6 +187,15 @@ class Handler(SimpleHTTPRequestHandler):
      day=str(p.get('schedule_date','')).strip() or None;period=str(p.get('schedule_period','')).strip() or None
      if (day is None)!=(period is None) or (day and (not row['start_date']<=day<=row['end_date'] or period not in PERIODS)):raise ValueError('Choose a valid day and time for this destination')
      c.execute('UPDATE places SET schedule_date=?,schedule_period=? WHERE id=?',(day,period,item))
+    elif kind=='info-cards':
+     row=c.execute('SELECT * FROM info_cards WHERE id=?',(item,)).fetchone()
+     if not row:raise ValueError('Information card not found')
+     c.execute('UPDATE info_cards SET title=?,body=?,link_url=? WHERE id=?',(clean(p.get('title',row['title']),'card title'),clean(p.get('body',row['body']),'information',4000),web_url(p.get('link_url',row['link_url'])),item))
+    elif kind=='checklist-items':
+     row=c.execute('SELECT * FROM checklist_items WHERE id=?',(item,)).fetchone()
+     if not row:raise ValueError('Checklist item not found')
+     completed=1 if p.get('completed',bool(row['completed'])) else 0
+     c.execute('UPDATE checklist_items SET item_text=?,completed=? WHERE id=?',(clean(p.get('item_text',row['item_text']),'list item',240),completed,item))
     elif kind=='holidays':
      row=c.execute('SELECT * FROM holidays WHERE id=?',(item,)).fetchone()
      if not row:raise ValueError('Holiday not found')
@@ -196,9 +221,9 @@ class Handler(SimpleHTTPRequestHandler):
    self.respond({'updated':True})
   except (ValueError,json.JSONDecodeError) as e:self.respond({'error':str(e)},400)
  def do_DELETE(self):
-  m=re.fullmatch(r'/api/(places|travel|destinations|holidays)/(\d+)',urllib.parse.urlparse(self.path).path)
+  m=re.fullmatch(r'/api/(places|travel|destinations|holidays|info-cards|checklist-items)/(\d+)',urllib.parse.urlparse(self.path).path)
   if not m:self.send_error(404);return
-  table,item=m.group(1),int(m.group(2))
+  kind,item=m.group(1),int(m.group(2));table={'info-cards':'info_cards','checklist-items':'checklist_items'}.get(kind,kind)
   with db() as c:
    if table=='destinations':c.execute('DELETE FROM places WHERE destination_id=?',(item,))
    if table=='holidays':c.execute('DELETE FROM places WHERE destination_id IN (SELECT id FROM destinations WHERE holiday_id=?)',(item,))

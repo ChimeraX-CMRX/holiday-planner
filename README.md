@@ -9,8 +9,10 @@ A lightweight, self-hosted web app for planning single- or multi-destination hol
 - Any number of holidays and destinations
 - Automatic destination maps and country flags
 - Hotels, restaurants, bars, sights and free-text ideas
+- Editable destination information cards for visas, health notes, useful phrases and links
 - Morning, afternoon, evening and night scheduling
 - Whole-trip calendar with every day shown
+- Whole-trip packing and to-do checklists
 - Flights, trains, ferries, coaches, cars, taxis and custom journeys
 - Planned/booked status for holidays and journeys
 - City, beach, wildlife, winter, road-trip and colour themes

@@ -34,7 +34,7 @@ def main():
  if path.exists() and not args.force: raise SystemExit(f'{path} already exists; choose another path or use --force')
  if path.exists(): path.unlink()
  server.DB_PATH=path;c=server.db()
- # Remove the built-in migration trip from a brand-new database and replace it with fictional data.
+ # Keep reruns deterministic if the schema is reused during local evaluation.
  c.execute('DELETE FROM places');c.execute('DELETE FROM travel');c.execute('DELETE FROM destinations');c.execute('DELETE FROM holidays')
  hid=c.execute('INSERT INTO holidays(name,subtitle,start_date,end_date,status,theme,created_at) VALUES(?,?,?,?,?,?,?)',(*HOLIDAY,int(time.time()))).lastrowid
  ids={}
@@ -45,5 +45,8 @@ def main():
   for category,name,lat,lon,day,period in places:
    source='map' if lat is not None else 'text';url=f'https://www.google.com/maps/search/?api=1&query={lat},{lon}' if lat is not None else None
    c.execute('INSERT INTO places(city,destination_id,category,name,url,latitude,longitude,created_at,schedule_date,schedule_period,source_type) VALUES(?,?,?,?,?,?,?,?,?,?,?)',(slug,ids[slug],category,name,url,lat,lon,int(time.time()),day,period,source))
+ c.execute('INSERT INTO info_cards(destination_id,title,body,link_url,created_at) VALUES(?,?,?,?,?)',(ids['amsterdam'],'Local transport','Use contactless payment on buses, trams and trains. Keep this card for any destination-specific reminders.','https://www.iamsterdam.com/en/travel-stay/getting-around',int(time.time())))
+ for typ,text,done in [('packing','Passport and travel documents',1),('packing','Comfortable walking shoes',0),('packing','European plug adaptor',0),('todo','Check museum reservation times',1),('todo','Download offline city maps',0),('todo','Confirm final rail journey',0)]:
+  c.execute('INSERT INTO checklist_items(holiday_id,list_type,item_text,completed,created_at) VALUES(?,?,?,?,?)',(hid,typ,text,done,int(time.time())))
  c.commit();c.close();print(f'Created fictional demo at {path}')
 if __name__=='__main__':main()
