@@ -75,10 +75,21 @@ def resolve_url(url):
    try:urllib.request.build_opener(NoRedirect()).open(urllib.request.Request(url,headers=headers),timeout=10)
    except urllib.error.HTTPError as r:
     if r.code in {301,302,303,307,308}:url=urllib.parse.urljoin(url,r.headers.get('Location',''))
-  with urllib.request.urlopen(urllib.request.Request(url,headers=headers),timeout=10) as r:return r.geturl(),r.read(300000).decode('utf-8','replace')
+  with urllib.request.urlopen(urllib.request.Request(url,headers=headers),timeout=10) as r:
+   final,page=r.geturl(),r.read(300000).decode('utf-8','replace')
+  preview=re.search(r'<link href="([^"]*/maps/preview/place[^\"]+)',page,re.I)
+  if preview:
+   preview_url=urllib.parse.urljoin(final,html.unescape(preview.group(1)))
+   if google_host(preview_url):
+    with urllib.request.urlopen(urllib.request.Request(preview_url,headers=headers),timeout=10) as r:page=r.read(300000).decode('utf-8','replace')+'\n'+page
+  return final,page
  except (urllib.error.URLError,TimeoutError) as e:raise ValueError('That Google Maps link could not be opened') from e
 def coords_from(text):
  text=urllib.parse.unquote(text)
+ m=re.search(r'\[\[\s*\d+(?:\.\d+)?\s*,\s*(-?\d{1,3}(?:\.\d+))\s*,\s*(-?\d{1,2}(?:\.\d+))\s*\]',text)
+ if m:
+  lon,lat=map(float,m.groups())
+  if -90<=lat<=90 and -180<=lon<=180:return lat,lon
  for p in (r'!3d(-?\d{1,2}(?:\.\d+))!4d(-?\d{1,3}(?:\.\d+))',r'@(-?\d{1,2}(?:\.\d+)?),(-?\d{1,3}(?:\.\d+)?)',r'[?&](?:query|q|ll)=(-?\d{1,2}(?:\.\d+)?)(?:%2C|,)(-?\d{1,3}(?:\.\d+)?)',r'"latitude"\s*:\s*(-?\d{1,2}(?:\.\d+)).{0,100}?"longitude"\s*:\s*(-?\d{1,3}(?:\.\d+))'):
   m=re.search(p,text,re.I|re.S)
   if m:
@@ -88,6 +99,10 @@ def coords_from(text):
 def place_name(url,page):
  m=re.search(r'/maps/(?:place|search)/([^/@?]+)',urllib.parse.unquote(url))
  if m:return urllib.parse.unquote_plus(m.group(1)).strip()[:120]
+ m=re.search(r'"0x[0-9a-f]+:0x[0-9a-f]+"\s*,\s*"((?:[^"\\]|\\.)+)"',page,re.I)
+ if m:
+  try:return json.loads(f'"{m.group(1)}"').strip()[:120]
+  except json.JSONDecodeError:pass
  m=re.search(r'<title>(.*?)</title>',page,re.I|re.S)
  return html.unescape(re.sub(r'\s*[-–|]\s*Google Maps.*$','',m.group(1))).strip()[:120] if m else 'Saved place'
 def geocode(name,country):

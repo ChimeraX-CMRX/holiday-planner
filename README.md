@@ -9,6 +9,7 @@ A lightweight, self-hosted web app for planning single- or multi-destination hol
 - Any number of holidays and destinations
 - Automatic destination maps and country flags
 - Hotels, restaurants, bars, sights and free-text ideas
+- Google Maps links, including shortened mobile sharing links
 - Editable destination information cards for visas, health notes, useful phrases and links
 - Morning, afternoon, evening and night scheduling
 - Whole-trip calendar with every day shown
