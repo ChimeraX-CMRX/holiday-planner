@@ -1,0 +1,28 @@
+[Unit]
+Description=Holiday Planner web application
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=website
+Group=website
+WorkingDirectory=/opt/holiday-planner
+EnvironmentFile=-/etc/default/holiday-planner
+ExecStart=/usr/bin/python3 /opt/holiday-planner/server.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/holiday-planner
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=multi-user.target

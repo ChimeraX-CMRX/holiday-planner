@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Holiday Planner: a privacy-friendly, self-hosted web app for maps, places, journeys and flexible daily plans.">
+  <title>Holiday Planner</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="hero">
+    <div class="wrap">
+      <p class="eyebrow">Self-hosted travel planning</p>
+      <h1>One holiday.<br>Every place, journey and plan.</h1>
+      <p class="intro">A lightweight web app for building multi-city trips with maps, saved places, travel legs and a morning-to-night calendar.</p>
+      <div class="actions">
+        <a class="button primary" href="https://github.com/ChimeraX-CMRX/holiday-planner">View on GitHub</a>
+        <a class="button" href="https://github.com/ChimeraX-CMRX/holiday-planner#quick-start">Install guide</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="features" aria-label="Features">
+      <article><strong>Map every stop</strong><span>Separate destination tabs, familiar map pins and cached OpenStreetMap tiles.</span></article>
+      <article><strong>Plan the whole day</strong><span>Assign multiple places or notes to morning, afternoon, evening and night.</span></article>
+      <article><strong>Join the journey</strong><span>Track flights, trains, ferries and other travel as planned or booked.</span></article>
+      <article><strong>Keep it yours</strong><span>Your plans live in a local SQLite database that is never part of the repository.</span></article>
+    </section>
+
+    <section class="showcase">
+      <p class="eyebrow">Fictional two-week demo</p>
+      <h2>European Rail Adventure</h2>
+      <p>Amsterdam, Paris, Zürich and Rome, with famous landmarks, restaurants, fictional flights and rail journeys. The demo contains no real traveller or booking data.</p>
+      <figure class="wide"><img src="screenshots/europe-overview.png" alt="Whole holiday calendar for the fictional European Rail Adventure"><figcaption>Every trip day stays visible, including unplanned time and Night slots.</figcaption></figure>
+      <div class="gallery">
+        <figure><img src="screenshots/europe-destination.png" alt="Amsterdam destination map, places and calendar"><figcaption>Destination map and daily plan</figcaption></figure>
+        <figure><img src="screenshots/europe-journeys.png" alt="Fictional flights and rail journeys"><figcaption>Planned and booked journeys</figcaption></figure>
+      </div>
+    </section>
+
+    <section class="install">
+      <div><p class="eyebrow">Simple deployment</p><h2>Choose your own address and port.</h2></div>
+      <pre><code>HOLIDAY_HOST=0.0.0.0 \
+HOLIDAY_PORT=8085 \
+python3 server.py</code></pre>
+      <p>Python 3.9+ is the only runtime dependency. A hardened systemd service, environment template and one-command demo seed are included.</p>
+    </section>
+  </main>
+
+  <footer><div class="wrap">Holiday Planner · MIT licensed · Map data © OpenStreetMap contributors</div></footer>
+</body>
+</html>
