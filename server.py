@@ -11,7 +11,7 @@ ROOT=Path(__file__).resolve().parent
 DB_PATH=Path(os.environ.get('HOLIDAY_DB_PATH',ROOT/'holiday-planner.sqlite3')).expanduser()
 TILE_CACHE=Path(os.environ.get('HOLIDAY_TILE_CACHE',ROOT/'tile-cache')).expanduser()
 LISTEN_HOST=os.environ.get('HOLIDAY_HOST','0.0.0.0'); LISTEN_PORT=int(os.environ.get('HOLIDAY_PORT','7070')); MAX_BODY=32768
-CATEGORIES={'hotel','food','activity'}; PERIODS={'morning','afternoon','evening','night'}; LIST_TYPES={'packing','todo'}
+CATEGORIES={'hotel','food','activity'}; PERIODS={'full-day','morning','afternoon','evening','night'}; LIST_TYPES={'packing','todo'}
 HOLIDAY_STATUSES={'planning','booked'}; TRAVEL_STATUSES={'planned','booked'}
 TRAVEL_TYPES={'flight','train','ferry','coach','car','taxi','other'}
 THEMES={'city','beach','wildlife','winter','roadtrip','teal','blue','purple','orange','green','mono','custom'}
