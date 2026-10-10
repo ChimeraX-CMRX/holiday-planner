@@ -23,18 +23,20 @@ def db():
  c.executescript('''
  CREATE TABLE IF NOT EXISTS holidays(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,subtitle TEXT NOT NULL DEFAULT '',start_date TEXT NOT NULL,end_date TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'planning',theme TEXT NOT NULL DEFAULT 'city',primary_color TEXT,accent_color TEXT,created_at INTEGER NOT NULL);
  CREATE TABLE IF NOT EXISTS destinations(id INTEGER PRIMARY KEY AUTOINCREMENT,holiday_id INTEGER NOT NULL REFERENCES holidays(id) ON DELETE CASCADE,slug TEXT NOT NULL,name TEXT NOT NULL,country TEXT NOT NULL,country_code TEXT NOT NULL,start_date TEXT NOT NULL,end_date TEXT NOT NULL,latitude REAL NOT NULL,longitude REAL NOT NULL,sort_order INTEGER NOT NULL DEFAULT 0,UNIQUE(holiday_id,slug));
- CREATE TABLE IF NOT EXISTS places(id INTEGER PRIMARY KEY AUTOINCREMENT,city TEXT,category TEXT NOT NULL,name TEXT NOT NULL,url TEXT,latitude REAL,longitude REAL,created_at INTEGER NOT NULL,schedule_date TEXT,schedule_period TEXT,source_type TEXT NOT NULL DEFAULT 'map',destination_id INTEGER);
+ CREATE TABLE IF NOT EXISTS places(id INTEGER PRIMARY KEY AUTOINCREMENT,city TEXT,category TEXT NOT NULL,name TEXT NOT NULL,url TEXT,latitude REAL,longitude REAL,created_at INTEGER NOT NULL,schedule_date TEXT,schedule_period TEXT,stay_start_date TEXT,stay_end_date TEXT,source_type TEXT NOT NULL DEFAULT 'map',destination_id INTEGER);
  CREATE TABLE IF NOT EXISTS travel(id INTEGER PRIMARY KEY AUTOINCREMENT,holiday_id INTEGER NOT NULL REFERENCES holidays(id) ON DELETE CASCADE,travel_type TEXT NOT NULL,service_number TEXT NOT NULL DEFAULT '',from_name TEXT NOT NULL,to_name TEXT NOT NULL,departure_at TEXT NOT NULL,arrival_at TEXT,status TEXT NOT NULL DEFAULT 'planned',terminal TEXT NOT NULL DEFAULT '',booking_reference TEXT NOT NULL DEFAULT '',notes TEXT NOT NULL DEFAULT '',created_at INTEGER NOT NULL);
  CREATE TABLE IF NOT EXISTS info_cards(id INTEGER PRIMARY KEY AUTOINCREMENT,destination_id INTEGER NOT NULL REFERENCES destinations(id) ON DELETE CASCADE,title TEXT NOT NULL,body TEXT NOT NULL DEFAULT '',link_url TEXT NOT NULL DEFAULT '',created_at INTEGER NOT NULL);
  CREATE TABLE IF NOT EXISTS checklist_items(id INTEGER PRIMARY KEY AUTOINCREMENT,holiday_id INTEGER NOT NULL REFERENCES holidays(id) ON DELETE CASCADE,list_type TEXT NOT NULL,item_text TEXT NOT NULL,completed INTEGER NOT NULL DEFAULT 0,created_at INTEGER NOT NULL);
  ''')
  pc=cols(c,'places')
- for name,definition in [('schedule_date','TEXT'),('schedule_period','TEXT'),('source_type',"TEXT NOT NULL DEFAULT 'map'"),('destination_id','INTEGER')]:
+ for name,definition in [('schedule_date','TEXT'),('schedule_period','TEXT'),('stay_start_date','TEXT'),('stay_end_date','TEXT'),('source_type',"TEXT NOT NULL DEFAULT 'map'"),('destination_id','INTEGER')]:
   if name not in pc: c.execute(f'ALTER TABLE places ADD COLUMN {name} {definition}')
  if c.execute('SELECT count(*) FROM places WHERE destination_id IS NULL').fetchone()[0]:
   hid=c.execute('SELECT id FROM holidays ORDER BY id LIMIT 1').fetchone()[0]
   for r in c.execute('SELECT id,slug FROM destinations WHERE holiday_id=?',(hid,)):
    c.execute('UPDATE places SET destination_id=? WHERE city=? AND destination_id IS NULL',(r['id'],r['slug']))
+ # Preserve legacy hotel assignments as a one-day stay until the user expands them.
+ c.execute("UPDATE places SET stay_start_date=schedule_date,stay_end_date=schedule_date,schedule_date=NULL,schedule_period=NULL WHERE category='hotel' AND stay_start_date IS NULL AND schedule_date IS NOT NULL")
  c.commit(); return c
 
 def clean(v,label,maxlen=120,required=True):
@@ -113,7 +115,7 @@ def geocode(name,country):
   if not result:raise ValueError('That destination could not be found on the map')
   return float(result[0]['lat']),float(result[0]['lon'])
  except (urllib.error.URLError,TimeoutError,KeyError,TypeError) as e:raise ValueError('That destination could not be found on the map') from e
-def state(c):return {'holidays':[dict(r) for r in c.execute('SELECT * FROM holidays ORDER BY start_date,id')],'destinations':[dict(r) for r in c.execute('SELECT * FROM destinations ORDER BY holiday_id,sort_order,start_date,id')],'places':[dict(r) for r in c.execute('SELECT id,destination_id,category,name,url,latitude,longitude,schedule_date,schedule_period,source_type FROM places WHERE destination_id IS NOT NULL ORDER BY created_at,id')],'travel':[dict(r) for r in c.execute('SELECT * FROM travel ORDER BY holiday_id,departure_at,id')],'info_cards':[dict(r) for r in c.execute('SELECT * FROM info_cards ORDER BY created_at,id')],'checklist_items':[dict(r) for r in c.execute('SELECT * FROM checklist_items ORDER BY completed,created_at,id')]}
+def state(c):return {'holidays':[dict(r) for r in c.execute('SELECT * FROM holidays ORDER BY start_date,id')],'destinations':[dict(r) for r in c.execute('SELECT * FROM destinations ORDER BY holiday_id,sort_order,start_date,id')],'places':[dict(r) for r in c.execute('SELECT id,destination_id,category,name,url,latitude,longitude,schedule_date,schedule_period,stay_start_date,stay_end_date,source_type FROM places WHERE destination_id IS NOT NULL ORDER BY created_at,id')],'travel':[dict(r) for r in c.execute('SELECT * FROM travel ORDER BY holiday_id,departure_at,id')],'info_cards':[dict(r) for r in c.execute('SELECT * FROM info_cards ORDER BY created_at,id')],'checklist_items':[dict(r) for r in c.execute('SELECT * FROM checklist_items ORDER BY completed,created_at,id')]}
 
 class Handler(SimpleHTTPRequestHandler):
  server_version='HolidayPlanner/2.0'
@@ -199,9 +201,14 @@ class Handler(SimpleHTTPRequestHandler):
     if kind=='places':
      row=c.execute('SELECT p.*,d.start_date,d.end_date FROM places p JOIN destinations d ON d.id=p.destination_id WHERE p.id=?',(item,)).fetchone()
      if not row:raise ValueError('Place not found')
-     day=str(p.get('schedule_date','')).strip() or None;period=str(p.get('schedule_period','')).strip() or None
-     if (day is None)!=(period is None) or (day and (not row['start_date']<=day<=row['end_date'] or period not in PERIODS)):raise ValueError('Choose a valid day and time for this destination')
-     c.execute('UPDATE places SET schedule_date=?,schedule_period=? WHERE id=?',(day,period,item))
+     if row['category']=='hotel':
+      start=str(p.get('stay_start_date','')).strip() or None;end=str(p.get('stay_end_date','')).strip() or None
+      if (start is None)!=(end is None) or (start and not row['start_date']<=start<=end<=row['end_date']):raise ValueError('Choose a valid check-in and check-out range for this destination')
+      c.execute('UPDATE places SET stay_start_date=?,stay_end_date=?,schedule_date=NULL,schedule_period=NULL WHERE id=?',(start,end,item))
+     else:
+      day=str(p.get('schedule_date','')).strip() or None;period=str(p.get('schedule_period','')).strip() or None
+      if (day is None)!=(period is None) or (day and (not row['start_date']<=day<=row['end_date'] or period not in PERIODS)):raise ValueError('Choose a valid day and time for this destination')
+      c.execute('UPDATE places SET schedule_date=?,schedule_period=? WHERE id=?',(day,period,item))
     elif kind=='info-cards':
      row=c.execute('SELECT * FROM info_cards WHERE id=?',(item,)).fetchone()
      if not row:raise ValueError('Information card not found')
