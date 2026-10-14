@@ -76,5 +76,23 @@ class ItineraryTests(unittest.TestCase):
         self.assertTrue(content.startswith(b'%PDF-'))
         self.assertGreater(len(content),10000)
 
+    def test_sharable_pdf_excludes_research_notes_and_empty_placeholders(self):
+        try:
+            from reportlab.platypus import Paragraph
+        except ImportError:
+            self.skipTest('PDF dependency not installed')
+        with server.db() as c:
+            itinerary.save(c,1,dict(kind='travel',id=1,details=dict(sources='https://example.com/research',verification='Research verification note')))
+            itinerary.save(c,1,dict(kind='hotel',id=1,details=dict(address='1 Example Street',phone='+33 123',verification='Hotel verification note')))
+            data=itinerary.get(c,1)
+        self.assertEqual(data['travel'][0]['details']['verification'],'Research verification note')
+        with patch('reportlab.platypus.Paragraph',side_effect=Paragraph) as paragraphs:
+            itinerary.pdf(data)
+        rendered='\n'.join(call.args[0] for call in paragraphs.call_args_list)
+        for excluded in ['No travel planned','Source 1','example.com/research','Research verification note','Hotel verification note','Details last saved',data['notice']]:
+            self.assertNotIn(excluded,rendered)
+        for included in ['Sharable travel itinerary','1 Example Street','+33 123','AF123']:
+            self.assertIn(included,rendered)
+
 
 if __name__=='__main__':unittest.main()

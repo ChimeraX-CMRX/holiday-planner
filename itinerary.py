@@ -179,18 +179,10 @@ def pdf(data):
     def date(s):
         if not s:return 'Not entered'
         return dt.datetime.fromisoformat(s).strftime('%a %d %b %Y'+(' %H:%M' if 'T' in s else ''))
-    def sources(d):
-        result=[]
-        for i,url in enumerate(d.get('sources','').splitlines(),1):
-            if urllib.parse.urlparse(url).scheme in ('https','http'):
-                result.append(Paragraph(f'<link href="{html.escape(url,quote=True)}" color="#285b72">Source {i}: {text(urllib.parse.urlparse(url).netloc)}</link>',styles['SmallText']))
-        if d.get('verification'):result.append(p(d['verification'],'SmallText'))
-        if d.get('updated_at'):result.append(p('Details last saved: '+d['updated_at'],'SmallText'))
-        return result
-    story=[p(data['holiday']['name'],'Title'),p(f"{date(data['holiday']['start_date'])} - {date(data['holiday']['end_date'])} | {data['holiday']['status'].title()}"),p(data['notice'],'SmallText'),Spacer(1,4*mm),p('At a glance','Heading2')]
+    story=[p(data['holiday']['name'],'Title'),p(f"{date(data['holiday']['start_date'])} - {date(data['holiday']['end_date'])} | {data['holiday']['status'].title()}"),p('Sharable travel itinerary','SmallText'),Spacer(1,4*mm),p('At a glance','Heading2')]
     rows=[[p('Date'),p('Area'),p('Travel - local times')]]
     for day in data['calendar']:
-        rows.append([p(date(day['date']),'SmallText'),p(' / '.join(day['areas']) or 'Travel day / no destination assigned','SmallText'),p('\n'.join(day['travel']) or 'No travel planned','SmallText')])
+        rows.append([p(date(day['date']),'SmallText'),p(' / '.join(day['areas']) or 'Travel day / no destination assigned','SmallText'),p('\n'.join(day['travel']),'SmallText')])
     table=Table(rows,colWidths=[32*mm,52*mm,90*mm],repeatRows=1,hAlign='LEFT')
     table.setStyle(TableStyle([('BACKGROUND',(0,0),(-1,0),colors.HexColor('#e4edef')),('VALIGN',(0,0),(-1,-1),'TOP'),('BOTTOMPADDING',(0,0),(-1,-1),6),('TOPPADDING',(0,0),(-1,-1),6),('LINEBELOW',(0,0),(-1,-1),.3,colors.HexColor('#d5dfe2')),('ROWBACKGROUNDS',(0,1),(-1,-1),[colors.white,colors.HexColor('#f6f8f8')])]))
     story.extend([table,PageBreak(),p('Travel details','Title')])
@@ -207,7 +199,7 @@ def pdf(data):
             story.extend([p(label+': '+date(j[key])+' | '+(d.get(side+'_timezone') or 'local time; zone not recorded')),p('Address: '+(d.get(side+'_address') or 'Not entered - check booking'),'SmallText')])
         if j['terminal']:story.append(p('Terminal / station: '+j['terminal']))
         if j['notes']:story.append(p(j['notes'],'SmallText'))
-        story.extend(sources(d));story.append(Spacer(1,4*mm))
+        story.append(Spacer(1,4*mm))
         story[block_start:] = [KeepTogether(story[block_start:])]
     story.extend([PageBreak(),p('Accommodation','Title')])
     if not data['hotels']:story.append(p('No hotels added.'))
@@ -217,11 +209,11 @@ def pdf(data):
         story.extend([p(hotel['name'],'Heading2'),p(hotel['destination']),p('Check-in: '+date(hotel['stay_start_date'])+' | Check-out: '+date(hotel['stay_end_date'])),p('Address: '+(d.get('address') or 'Not entered')),p('Telephone: '+(d.get('phone') or 'Not found - confirm with hotel'))])
         if not hotel['dates_valid']:story.append(p('Stay dates missing or outside destination dates; not shown in the calendar.','SmallText'))
         if d.get('website'):story.append(p(d['website'],'SmallText'))
-        story.extend(sources(d));story.append(Spacer(1,5*mm))
+        story.append(Spacer(1,5*mm))
         story[block_start:] = [KeepTogether(story[block_start:])]
     def footer(canvas,doc):
         canvas.setFont('Itinerary',7);canvas.setFillColor(colors.HexColor('#52636b'))
-        canvas.drawString(18*mm,12*mm,'Generated '+data['generated_at']+' | Reconfirm travel details before departure')
+        canvas.drawString(18*mm,12*mm,'Generated '+data['generated_at'])
         canvas.drawRightString(192*mm,12*mm,str(doc.page))
-    SimpleDocTemplate(output,pagesize=A4,rightMargin=18*mm,leftMargin=18*mm,topMargin=17*mm,bottomMargin=20*mm,title=data['holiday']['name']+' - Itinerary',author='Holiday Planner').build(story,onFirstPage=footer,onLaterPages=footer)
+    SimpleDocTemplate(output,pagesize=A4,rightMargin=18*mm,leftMargin=18*mm,topMargin=17*mm,bottomMargin=20*mm,title=data['holiday']['name']+' - Sharable travel itinerary',author='Holiday Planner').build(story,onFirstPage=footer,onLaterPages=footer)
     return output.getvalue()
