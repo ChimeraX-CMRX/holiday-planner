@@ -17,7 +17,8 @@ A lightweight, self-hosted web app for planning single- or multi-destination hol
 - Google Maps links, including shortened mobile sharing links
 - Map-pin popups that show and update each place's calendar assignment
 - Editable destination information cards for visas, health notes, useful phrases and links
-- Full-day, morning, afternoon, evening and night scheduling
+- Meal-specific breakfast, brunch, lunch and dinner slots for restaurants and bars
+- Multi-slot activity scheduling across morning, afternoon, evening and night
 - Journey entry from either a destination or the whole-trip view
 - Transport displayed inside destination and whole-trip calendars
 - Whole-trip calendar with every day shown

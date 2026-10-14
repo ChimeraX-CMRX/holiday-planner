@@ -57,6 +57,20 @@ class ItineraryTests(unittest.TestCase):
         self.assertFalse(d['hotels'][0]['dates_valid'])
         self.assertTrue(all(not day['accommodation'] for day in d['calendar']))
 
+    def test_full_day_events_migrate_to_three_activity_blocks(self):
+        with server.db() as c:
+            c.execute("UPDATE places SET schedule_date='2027-05-02',schedule_period='full-day',schedule_periods=NULL WHERE id=2")
+        with server.db() as c:
+            place=c.execute('SELECT schedule_period,schedule_periods FROM places WHERE id=2').fetchone()
+        self.assertEqual(place['schedule_period'],'morning')
+        self.assertEqual(json.loads(place['schedule_periods']),['morning','afternoon','evening'])
+
+    def test_schedule_period_validation_matches_category(self):
+        self.assertEqual(server.schedule_period_values(['morning','afternoon'],'activity'),['morning','afternoon'])
+        self.assertEqual(server.schedule_period_values(['brunch'],'food'),['brunch'])
+        with self.assertRaises(ValueError): server.schedule_period_values(['full-day'],'activity')
+        with self.assertRaises(ValueError): server.schedule_period_values(['breakfast'],'activity')
+
     def test_lookup_is_cached_and_does_not_save_suggestions(self):
         response=io.BytesIO(json.dumps([dict(osm_type='way',osm_id=12,name='Example Hotel',display_name='1 Example Street',extratags={})]).encode())
         with patch('urllib.request.urlopen',return_value=response) as fetch:
