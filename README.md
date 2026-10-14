@@ -8,6 +8,8 @@ A lightweight, self-hosted web app for planning single- or multi-destination hol
 
 - Any number of holidays and destinations
 - Automatic destination maps and country flags
+- Destination day countdowns, updating to arrival, in-progress and completed status
+- Bookmarkable holiday and destination URLs that survive refresh, with matching browser titles
 - Hotels with check-in/check-out ranges, plus restaurants, bars, sights and free-text ideas
 - Google Maps links, including shortened mobile sharing links
 - Map-pin popups that show and update each place's calendar assignment
@@ -94,6 +96,8 @@ The demo contains Amsterdam, Paris, Zürich and Rome; fictional flight/service n
 ![Whole-trip journeys](docs/screenshots/europe-journeys.png)
 
 ## Data and backups
+
+Select a holiday and destination (or Whole trip), then bookmark or copy the current address. Links use stable IDs, for example `/?holiday=1&destination=3` or `/?holiday=1&destination=overall`; renaming a holiday or destination does not break its bookmark. Past holidays can also be opened directly. Deleted or invalid selections fall back to an available destination. Countdowns use the calendar date on the device viewing the planner.
 
 Everything personal is in the SQLite file configured by `HOLIDAY_DB_PATH`. Back up that file while the service is stopped, or use SQLite's online backup tooling. Never commit it to source control.
 
