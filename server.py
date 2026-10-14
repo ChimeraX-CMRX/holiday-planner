@@ -6,6 +6,7 @@ import urllib.error, urllib.parse, urllib.request
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+import banners
 
 ROOT=Path(__file__).resolve().parent
 DB_PATH=Path(os.environ.get('HOLIDAY_DB_PATH',ROOT/'holiday-planner.sqlite3')).expanduser()
@@ -28,6 +29,7 @@ def db():
  CREATE TABLE IF NOT EXISTS info_cards(id INTEGER PRIMARY KEY AUTOINCREMENT,destination_id INTEGER NOT NULL REFERENCES destinations(id) ON DELETE CASCADE,title TEXT NOT NULL,body TEXT NOT NULL DEFAULT '',link_url TEXT NOT NULL DEFAULT '',created_at INTEGER NOT NULL);
  CREATE TABLE IF NOT EXISTS checklist_items(id INTEGER PRIMARY KEY AUTOINCREMENT,holiday_id INTEGER NOT NULL REFERENCES holidays(id) ON DELETE CASCADE,list_type TEXT NOT NULL,item_text TEXT NOT NULL,completed INTEGER NOT NULL DEFAULT 0,created_at INTEGER NOT NULL);
  ''')
+ banners.init_schema(c)
  pc=cols(c,'places')
  for name,definition in [('schedule_date','TEXT'),('schedule_period','TEXT'),('stay_start_date','TEXT'),('stay_end_date','TEXT'),('source_type',"TEXT NOT NULL DEFAULT 'map'"),('destination_id','INTEGER')]:
   if name not in pc: c.execute(f'ALTER TABLE places ADD COLUMN {name} {definition}')
@@ -115,7 +117,7 @@ def geocode(name,country):
   if not result:raise ValueError('That destination could not be found on the map')
   return float(result[0]['lat']),float(result[0]['lon'])
  except (urllib.error.URLError,TimeoutError,KeyError,TypeError) as e:raise ValueError('That destination could not be found on the map') from e
-def state(c):return {'holidays':[dict(r) for r in c.execute('SELECT * FROM holidays ORDER BY start_date,id')],'destinations':[dict(r) for r in c.execute('SELECT * FROM destinations ORDER BY holiday_id,sort_order,start_date,id')],'places':[dict(r) for r in c.execute('SELECT id,destination_id,category,name,url,latitude,longitude,schedule_date,schedule_period,stay_start_date,stay_end_date,source_type FROM places WHERE destination_id IS NOT NULL ORDER BY created_at,id')],'travel':[dict(r) for r in c.execute('SELECT * FROM travel ORDER BY holiday_id,departure_at,id')],'info_cards':[dict(r) for r in c.execute('SELECT * FROM info_cards ORDER BY created_at,id')],'checklist_items':[dict(r) for r in c.execute('SELECT * FROM checklist_items ORDER BY completed,created_at,id')]}
+def state(c):return {'banner_photos':banners.saved_photos(c),'holidays':[dict(r) for r in c.execute('SELECT * FROM holidays ORDER BY start_date,id')],'destinations':[dict(r) for r in c.execute('SELECT * FROM destinations ORDER BY holiday_id,sort_order,start_date,id')],'places':[dict(r) for r in c.execute('SELECT id,destination_id,category,name,url,latitude,longitude,schedule_date,schedule_period,stay_start_date,stay_end_date,source_type FROM places WHERE destination_id IS NOT NULL ORDER BY created_at,id')],'travel':[dict(r) for r in c.execute('SELECT * FROM travel ORDER BY holiday_id,departure_at,id')],'info_cards':[dict(r) for r in c.execute('SELECT * FROM info_cards ORDER BY created_at,id')],'checklist_items':[dict(r) for r in c.execute('SELECT * FROM checklist_items ORDER BY completed,created_at,id')]}
 
 class Handler(SimpleHTTPRequestHandler):
  server_version='HolidayPlanner/2.0'
@@ -141,6 +143,20 @@ class Handler(SimpleHTTPRequestHandler):
     data=target.read_bytes();self.send_response(200);self.send_header('Content-Type','image/png');self.send_header('Content-Length',str(len(data)));self.send_header('Cache-Control','public, max-age=604800');self.end_headers();self.wfile.write(data)
    except (OSError,ValueError,urllib.error.URLError) as e:self.send_error(502,str(e))
    return
+  if path=='/api/banner-options' or re.fullmatch(r'/api/destinations/\d+/banner',path) or path.startswith('/banner-images/'):
+   try:
+    if path=='/api/banner-options':
+     query=urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+     get=lambda key,default='':query.get(key,[default])[0]
+     self.respond({'photos':banners.search(db,get('name'),get('country'),get('kind','recommended'),get('q'))})
+    elif path.startswith('/banner-images/'):
+     match=re.fullmatch(r'/banner-images/([0-9a-f]{24})\.jpg',path)
+     if not match:raise ValueError('Photo not found')
+     content=banners.image(db,match.group(1))
+     self.send_response(200);self.send_header('Content-Type','image/jpeg');self.send_header('Cache-Control','public, max-age=2592000');self.send_header('Content-Length',str(len(content)));self.end_headers();self.wfile.write(content)
+    else:self.respond({'photo':banners.automatic(db,int(path.split('/')[3]))})
+   except (ValueError,OSError,urllib.error.URLError) as e:self.respond({'error':'Photos could not be loaded. Please try again later.'},502)
+   return
   if path=='/api/state':
    with db() as c:self.respond(state(c))
    return
@@ -163,7 +179,9 @@ class Handler(SimpleHTTPRequestHandler):
      lat,lon=geocode(name,country);base=re.sub(r'[^a-z0-9]+','-',name.lower()).strip('-') or 'destination';slug=base;n=2
      while c.execute('SELECT 1 FROM destinations WHERE holiday_id=? AND slug=?',(hid,slug)).fetchone():slug=f'{base}-{n}';n+=1
      order=c.execute('SELECT COALESCE(MAX(sort_order),0)+1 FROM destinations WHERE holiday_id=?',(hid,)).fetchone()[0]
+     appearance=banners.settings(c,p)
      item=c.execute('INSERT INTO destinations(holiday_id,slug,name,country,country_code,start_date,end_date,latitude,longitude,sort_order) VALUES(?,?,?,?,?,?,?,?,?,?)',(hid,slug,name,country,clean(p.get('country_code'),'two-letter country code',2).upper(),start,end,lat,lon,order)).lastrowid
+     banners.save_settings(c,item,appearance)
     elif path=='/api/travel':
      hid=int(p.get('holiday_id',0));typ=p.get('travel_type');status=p.get('status','planned')
      if not c.execute('SELECT 1 FROM holidays WHERE id=?',(hid,)).fetchone() or typ not in TRAVEL_TYPES or status not in TRAVEL_STATUSES:raise ValueError('Invalid journey')
@@ -232,7 +250,9 @@ class Handler(SimpleHTTPRequestHandler):
      if end<start or start<row['holiday_start'] or end>row['holiday_end']:raise ValueError('Destination dates must fall within the holiday')
      name=clean(p.get('name',row['name']),'destination');country=clean(p.get('country',row['country']),'country')
      lat,lon=(geocode(name,country) if name!=row['name'] or country!=row['country'] else (row['latitude'],row['longitude']))
+     appearance=banners.settings(c,p,row)
      c.execute('UPDATE destinations SET name=?,country=?,country_code=?,start_date=?,end_date=?,latitude=?,longitude=? WHERE id=?',(name,country,clean(p.get('country_code',row['country_code']),'country code',2).upper(),start,end,lat,lon,item))
+     banners.save_settings(c,item,appearance)
     else:
      row=c.execute('SELECT * FROM travel WHERE id=?',(item,)).fetchone()
      if not row:raise ValueError('Journey not found')

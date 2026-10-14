@@ -8,6 +8,9 @@ A lightweight, self-hosted web app for planning single- or multi-destination hol
 
 - Any number of holidays and destinations
 - Automatic destination maps and country flags
+- Photographic destination banners for any trip, with Wikimedia Commons image search and local image caching
+- Cityscape, aerial, landmark, landscape and street photo suggestions, crop controls and four heading styles
+- Whole-trip photo collage and preserved photographer/licence credits
 - Destination day countdowns, updating to arrival, in-progress and completed status
 - Bookmarkable holiday and destination URLs that survive refresh, with matching browser titles
 - Hotels with check-in/check-out ranges, plus restaurants, bars, sights and free-text ideas
@@ -50,6 +53,7 @@ All runtime settings are optional environment variables:
 | `HOLIDAY_PORT` | `7070` | Listen port. Choose any unused port. |
 | `HOLIDAY_DB_PATH` | `./holiday-planner.sqlite3` | SQLite database location. |
 | `HOLIDAY_TILE_CACHE` | `./tile-cache` | Map tile cache location. |
+| `HOLIDAY_BANNER_CACHE` | `./banner-cache` | Cached Wikimedia Commons banner photographs. |
 
 Example on a LAN:
 
@@ -94,6 +98,16 @@ The demo contains Amsterdam, Paris, Zürich and Rome; fictional flight/service n
 ![Destination map and calendar](docs/screenshots/europe-destination.png?v=2)
 
 ![Whole-trip journeys](docs/screenshots/europe-journeys.png)
+
+## Destination banners
+
+Every existing and new destination defaults to an automatic photograph found using its name and country. Use **Banner appearance** in the banner, or **Edit destination → Banner appearance**, to search by category or a landmark name, choose a photograph, adjust its horizontal/vertical crop and preview heading styles. Save the destination to keep your choice. The same editor is available when adding any future destination. Choose **Plain banner** to turn photography off. Whole trip combines up to four destination photographs.
+
+Automatic selections are remembered until the destination name, country or photo category changes. Search results are cached for seven days; downloaded images are kept on the server. If Wikimedia is unavailable or has no suitable photo, the banner uses a readable fallback and the planner still works. Photo selection is optional: automatic search never blocks saving a destination. Search terms contain the destination/country or the custom photo query, not holiday dates or booking details. No API key is required.
+
+Images are landscape JPEGs with supported public-domain, CC0, CC BY or CC BY-SA metadata from Wikimedia Commons. **Photo credits** links each image to its Commons file page and licence, identifies its author and notes the display crop. Image rights remain with their respective creators; they are not covered by this repository's MIT licence. Metadata is stored with the database and must be retained with exported plans. Only Wikimedia image hosts are fetched by the banner image endpoint.
+
+Heading fonts are self-hosted: **Barlow Condensed** by Jeremy Tribby and **Cormorant Garamond** by Christian Thalmann, from the [Google Fonts repository](https://github.com/google/fonts), under the SIL Open Font License. Their licence files are in `fonts/`. Editorial and Modern use system fonts. These are visual styles, not official city fonts.
 
 ## Data and backups
 
