@@ -4,6 +4,9 @@ holiday-planner.sqlite3
 tile-cache/
 banner-cache/
 __pycache__/
+.venv/
+output/
+tmp/
 *.pyc
 .DS_Store
 screenshots/raw/

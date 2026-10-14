@@ -7,6 +7,7 @@ from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import banners
+import itinerary
 
 ROOT=Path(__file__).resolve().parent
 DB_PATH=Path(os.environ.get('HOLIDAY_DB_PATH',ROOT/'holiday-planner.sqlite3')).expanduser()
@@ -30,6 +31,7 @@ def db():
  CREATE TABLE IF NOT EXISTS checklist_items(id INTEGER PRIMARY KEY AUTOINCREMENT,holiday_id INTEGER NOT NULL REFERENCES holidays(id) ON DELETE CASCADE,list_type TEXT NOT NULL,item_text TEXT NOT NULL,completed INTEGER NOT NULL DEFAULT 0,created_at INTEGER NOT NULL);
  ''')
  banners.init_schema(c)
+ itinerary.init_schema(c)
  pc=cols(c,'places')
  for name,definition in [('schedule_date','TEXT'),('schedule_period','TEXT'),('stay_start_date','TEXT'),('stay_end_date','TEXT'),('source_type',"TEXT NOT NULL DEFAULT 'map'"),('destination_id','INTEGER')]:
   if name not in pc: c.execute(f'ALTER TABLE places ADD COLUMN {name} {definition}')
@@ -130,6 +132,16 @@ class Handler(SimpleHTTPRequestHandler):
   data=json.dumps(payload,separators=(',',':')).encode();self.send_response(status);self.send_header('Content-Type','application/json; charset=utf-8');self.send_header('Content-Length',str(len(data)));self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(data)
  def do_GET(self):
   path=urllib.parse.urlparse(self.path).path;m=re.fullmatch(r'/tiles/(\d{1,2})/(\d+)/(\d+)\.png',path)
+  report=re.fullmatch(r'/api/itinerary/(\d+)(\.pdf)?',path)
+  if report:
+   try:
+    with db() as c:document=itinerary.get(c,int(report[1]))
+    if not report[2]:self.respond(document);return
+    content=itinerary.pdf(document)
+    self.send_response(200);self.send_header('Content-Type','application/pdf');self.send_header('Content-Length',str(len(content)));self.send_header('Content-Disposition',f'attachment; filename="holiday-{report[1]}-itinerary.pdf"');self.send_header('Cache-Control','no-store');self.end_headers();self.wfile.write(content)
+   except ImportError:self.respond({'error':'Install reportlab from requirements.txt to enable PDF downloads. The print view remains available.'},503)
+   except ValueError as e:self.respond({'error':str(e)},400)
+   return
   if m:
    z,x,y=map(int,m.groups())
    if z>19 or x>=2**z or y>=2**z:self.send_error(400);return
@@ -163,6 +175,17 @@ class Handler(SimpleHTTPRequestHandler):
   super().do_GET()
  def do_POST(self):
   path=urllib.parse.urlparse(self.path).path
+  report=re.fullmatch(r'/api/itinerary/(\d+)/(details|lookup)',path)
+  if report:
+   try:
+    p=body(self)
+    if report[2]=='lookup':self.respond({'candidates':itinerary.lookup(db,int(report[1]),p)})
+    else:
+     with db() as c:itinerary.save(c,int(report[1]),p)
+     self.respond({'updated':True})
+   except (ValueError,TypeError) as e:self.respond({'error':str(e)},400)
+   except OSError:self.respond({'error':'Contact lookup is unavailable. You can enter details manually or retry later.'},502)
+   return
   try:
    p=body(self)
    with db() as c:

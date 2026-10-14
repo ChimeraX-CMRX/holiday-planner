@@ -27,7 +27,8 @@ A lightweight, self-hosted web app for planning single- or multi-destination hol
 - City, beach, wildlife, winter, road-trip and colour themes
 - Automatic previous-holiday grouping
 - SQLite storage and cached OpenStreetMap tiles
-- No third-party Python packages required
+- Printable itineraries and downloadable PDFs (ReportLab), with separate accommodation and travel details
+- Editable hotel contacts and airport/station addresses, with optional OpenStreetMap lookup suggestions
 
 ## Quick start
 
@@ -36,6 +37,9 @@ Requires Python 3.9 or newer.
 ```bash
 git clone https://github.com/ChimeraX-CMRX/holiday-planner.git
 cd holiday-planner
+python3 -m venv .venv
+. .venv/bin/activate
+python3 -m pip install -r requirements.txt
 HOLIDAY_HOST=127.0.0.1 HOLIDAY_PORT=7070 python3 server.py
 ```
 
@@ -110,6 +114,16 @@ Images are landscape JPEGs with supported public-domain, CC0, CC BY or CC BY-SA 
 Heading fonts are self-hosted: **Barlow Condensed** by Jeremy Tribby and **Cormorant Garamond** by Christian Thalmann, from the [Google Fonts repository](https://github.com/google/fonts), under the SIL Open Font License. Their licence files are in `fonts/`. Editorial and Modern use system fonts. These are visual styles, not official city fonts.
 
 ## Data and backups
+
+### Printable itinerary
+
+Open **Whole trip → Printable itinerary / PDF**. The report includes every date, destination areas, hotel check-in/check-out ranges and all journeys (both departure and arrival events, including overnight flights). It excludes sightseeing, restaurants, information cards, checklists and the dedicated booking-reference field. Journey notes and terminal/station text are included, so check them for private information before sharing an itinerary. Hotels have their own Accommodation section in the regular calendars, separate from Full day activities.
+
+The printable page has editable contact fields and explicit **Look up address / phone** buttons. Search by hotel or airport/station name and country, review the OpenStreetMap candidates, choose the correct location and save. Lookups are cached for 30 days and throttled to at most one request per 1.1 seconds. Only public place names/search terms are sent; dates, booking references and other saved plans are not. Missing phone numbers remain missing. Add official source URLs and verification notes when checking details yourself. There is no automatic bulk contact scraping or automatic overwriting of saved contacts.
+
+Flight times always come from saved journeys and are displayed as local times at each endpoint. The app does **not** claim live or independently verified flight schedules. Airline-prefix hints identify marketing carriers only; operating airlines and codeshare numbers must be checked against the booking. Date-specific schedule verification generally requires an airline booking or a licensed flight-data service; neither credentials nor private bookings are sent to a third party. Edit journey times in the main planner, and contact/airport/operator details in the itinerary. Missing or unverified data is labelled in both print and PDF outputs.
+
+PDF downloads require `reportlab` (see `requirements.txt`). The browser print view still works without it. For systemd, point `ExecStart` to the virtual environment's Python if using a virtual environment. On Debian, `apt install python3-reportlab` also works with the system Python. PDFs embed the included Bitstream Vera fonts; their licence is in `fonts/bitstream-vera-license.txt`. No generated itinerary, contact data or personal trip database belongs in Git; back up the SQLite database, which stores contact details and their source links. Offline checks: `python3 -m unittest test_banners test_itinerary`.
 
 Select a holiday and destination (or Whole trip), then bookmark or copy the current address. Links use stable IDs, for example `/?holiday=1&destination=3` or `/?holiday=1&destination=overall`; renaming a holiday or destination does not break its bookmark. Past holidays can also be opened directly. Deleted or invalid selections fall back to an available destination. Countdowns use the calendar date on the device viewing the planner.
 
