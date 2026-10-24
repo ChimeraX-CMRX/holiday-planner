@@ -275,6 +275,11 @@ class Handler(SimpleHTTPRequestHandler):
       c.execute('UPDATE places SET stay_start_date=?,stay_end_date=?,schedule_date=NULL,schedule_period=NULL,schedule_periods=NULL WHERE id=?',(start,end,item))
      else:
       day=str(p.get('schedule_date','')).strip() or None;periods=p.get('schedule_periods')
+      # Accept the former single-slot client while browsers refresh to the multi-slot picker.
+      if periods is None: periods=p.get('schedule_period')
+      if isinstance(periods,str):
+       try: periods=json.loads(periods) if periods.lstrip().startswith('[') else [periods]
+       except json.JSONDecodeError: periods=[periods]
       if day is None and periods in (None,[], ''): periods=[]
       if (day is None)!=(not not periods):raise ValueError('Choose both a day and at least one time')
       if day:
