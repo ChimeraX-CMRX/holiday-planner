@@ -150,6 +150,10 @@ def state(c):return {'banner_photos':banners.saved_photos(c),'holidays':[dict(r)
 class Handler(SimpleHTTPRequestHandler):
  server_version='HolidayPlanner/2.0'
  def end_headers(self):
+  # Prevent stale HTML from loading an older scheduling client after deployment.
+  static_path=urllib.parse.urlparse(self.path).path
+  if static_path=='/' or static_path.endswith(('.html','.js','.css')):
+   self.send_header('Cache-Control','no-store, max-age=0')
   for k,v in [('X-Content-Type-Options','nosniff'),('X-Frame-Options','DENY'),('Referrer-Policy','strict-origin-when-cross-origin'),('Permissions-Policy','camera=(), microphone=(), geolocation=()'),('Content-Security-Policy',"default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data: https://cdn.jsdelivr.net; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")]:self.send_header(k,v)
   super().end_headers()
  def translate_path(self,path):
