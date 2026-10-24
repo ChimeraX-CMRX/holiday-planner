@@ -285,7 +285,9 @@ class Handler(SimpleHTTPRequestHandler):
        try: periods=json.loads(periods) if periods.lstrip().startswith('[') else [periods]
        except json.JSONDecodeError: periods=[periods]
       if day is None and periods in (None,[], ''): periods=[]
-      if (day is None)!=(not not periods):raise ValueError('Choose both a day and at least one time')
+      # A schedule is valid only when both values are present, or when both are
+      # absent (the latter clears an existing schedule).
+      if bool(day)!=bool(periods):raise ValueError('Choose both a day and at least one time')
       if day:
        if not row['start_date']<=day<=row['end_date']:raise ValueError('Choose a valid day for this destination')
        periods=schedule_period_values(periods,row['category'])
